@@ -1,0 +1,18 @@
+.service-scene-panel .service-apply-layout{grid-template-columns:minmax(0,1fr) minmax(0,1.1fr)}
+.service-scene-panel .service-panel{min-width:0;padding:22px}
+.service-scene-panel .service-back{margin-bottom:18px}
+.service-scene-panel .service-title-info .service-title-heading h2{font-size:22px}
+.service-scene-panel .service-section-heading h1{overflow-wrap:anywhere}
+.service-scene-panel .service-filters input,.service-scene-panel .service-filters select{width:100%;min-width:0}
+.service-scene-panel .hall-dialog-content>.hall-leave-confirm{position:sticky;top:0;z-index:2;border-radius:12px}
+.service-scene-panel .system-actions{position:sticky;bottom:0;z-index:1;display:flex;flex-wrap:wrap;gap:10px;padding:12px 0;background:#fff}
+.service-scene-panel .system-actions button{min-height:44px}
+@media(max-width:760px){
+ .service-scene-panel .service-apply-layout{grid-template-columns:minmax(0,1fr);gap:0}
+ .service-scene-panel .service-panel{padding:16px}
+ .service-scene-panel .service-section-heading{flex-wrap:wrap;gap:10px}
+ .service-scene-panel .service-section-heading h1{font-size:23px}
+ .service-scene-panel .system-actions{padding-bottom:max(12px,env(safe-area-inset-bottom))}
+ .service-scene-panel .system-actions button{flex:1;min-width:110px}
+ .service-scene-panel input:not([type=checkbox]),.service-scene-panel textarea,.service-scene-panel select{font-size:16px}
+}

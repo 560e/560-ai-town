@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360" viewBox="0 0 640 360">
+ <defs><linearGradient id="bg" x2="1" y2="1"><stop stop-color="#073f92"/><stop offset="1" stop-color="#16bbdc"/></linearGradient></defs>
+ <rect width="640" height="360" fill="url(#bg)"/>
+ <circle cx="570" cy="70" r="145" fill="#fff" opacity=".07"/>
+ <circle cx="48" cy="365" r="165" fill="#fff" opacity=".06"/>
+ <path d="M256 85q32-15 64 3 32-18 64-3v92q-32-13-64 3-32-16-64-3z" fill="none" stroke="#c3f4ff" stroke-width="6" stroke-linejoin="round"/>
+ <path d="M320 90v88M272 112l30 3m-30 15 30 3m36-18 30-3m-30 21 30-3" fill="none" stroke="#c3f4ff" stroke-width="4" stroke-linecap="round"/>
+ <text x="320" y="247" text-anchor="middle" fill="white" font-family="sans-serif" font-size="34" font-weight="700">五六零 AI 学院</text>
+ <text x="320" y="285" text-anchor="middle" fill="#ccf2ff" font-family="sans-serif" font-size="16" letter-spacing="4">探索 AI · 学以致用</text>
+</svg>

@@ -1,0 +1,85 @@
+import assert from 'node:assert/strict';
+import {createRequire} from 'node:module';
+import {mkdir} from 'node:fs/promises';
+import {randomInt,randomUUID} from 'node:crypto';
+import {Pool} from 'pg';
+const require=createRequire(import.meta.url);
+const {chromium}=require(process.env.TOWN_PLAYWRIGHT_MODULE);
+const base=process.env.PASSWORD_TEST_URL;
+assert.equal(process.env.TOWN_DISPOSABLE_TEST_DB,'1');
+assert.equal(new URL(base).hostname,'127.0.0.1');
+const browser=await chromium.launch({executablePath:process.env.TOWN_BROWSER_EXECUTABLE,headless:true,args:['--use-angle=swiftshader','--enable-unsafe-swiftshader']});
+try{
+ const context=await browser.newContext({viewport:{width:430,height:932},isMobile:true,hasTouch:true,deviceScaleFactor:1});
+ await context.route('https://town-password.test/**',async route=>{
+  const req=route.request(),url=new URL(req.url());
+  const response=await context.request.fetch(base+url.pathname+url.search,{method:req.method(),headers:{...req.headers(),host:'town-password.test','x-forwarded-host':'town-password.test','x-forwarded-proto':'https','x-real-ip':'127.0.0.5'},data:req.postDataBuffer()??undefined,maxRedirects:0});
+  await route.fulfill({response});
+ });
+ const page=await context.newPage();page.setDefaultTimeout(60000);
+ await page.goto('https://town-password.test/');
+ await page.getByRole('button',{name:'游览小镇',exact:true}).click();
+ await page.getByRole('button',{name:'进入小镇',exact:true}).click();
+ await page.locator('canvas').waitFor();
+ const cdp=await context.newCDPSession(page);
+ async function pinch(start,end){
+  // Allow the software WebGL canvas and React effects to settle after a route remount.
+  await page.waitForTimeout(1000);
+  const points=d=>[{id:1,x:215-d/2,y:420},{id:2,x:215+d/2,y:420}];
+  await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:points(start)});
+  for(let i=1;i<=8;i++)await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:points(start+(end-start)*i/8)});
+  await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+ }
+ await pinch(240,80);
+ await page.getByRole('link',{name:'登录／注册',exact:true}).click();
+ const saved=await page.evaluate(()=>JSON.parse(sessionStorage.getItem('560-town-account-return-v1')));
+ assert.equal(saved.mode,'walking');assert.ok(saved.zoom.third>7&&saved.zoom.third<=60,'pinch-in moves walking camera farther');
+ console.log('PASS mobile real touch events zoom walking camera: '+saved.zoom.third.toFixed(2));
+ await page.getByRole('button',{name:'注册居民',exact:true}).click();
+ await page.getByText('本站当前不要求注册短信验证。',{exact:false}).waitFor();
+ assert.equal(await page.getByRole('button',{name:'注册并进入小镇',exact:true}).isEnabled(),true);
+ assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,'mobile account fits viewport');
+ await mkdir('.local/verification',{recursive:true});
+ await page.screenshot({path:'.local/verification/registration-mobile.png',fullPage:true});
+ console.log('PASS mobile registration policy UI and layout');
+ await page.getByRole('link',{name:'先游览小镇 ↗',exact:true}).click();
+ await page.getByRole('link',{name:'登录／注册',exact:true}).waitFor();
+ await page.locator('canvas').waitFor();
+ await page.locator('.scene-loading').waitFor({state:'hidden'});
+ await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+ await pinch(80,240);
+ await page.getByRole('link',{name:'登录／注册',exact:true}).click();
+ const nearer=await page.evaluate(()=>JSON.parse(sessionStorage.getItem('560-town-account-return-v1')).zoom.third);
+ assert.ok(nearer<saved.zoom.third&&nearer>=5.2,`zoom after return and spread: ${nearer}, before: ${saved.zoom.third}`);
+ console.log('PASS reverse pinch zooms in and account return restores walking');
+ await page.getByRole('link',{name:'先游览小镇 ↗',exact:true}).click();
+ await page.locator('canvas').waitFor();
+ await page.locator('.scene-loading').waitFor({state:'hidden'});
+ await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+ await page.evaluate(()=>{document.querySelector('canvas').addEventListener('wheel',()=>requestAnimationFrame(()=>document.documentElement.dataset.testWheel='done'),{once:true});});
+ await page.waitForTimeout(1000);
+ await page.mouse.move(215,420);await page.mouse.wheel(0,200);
+ await page.waitForFunction(()=>document.documentElement.dataset.testWheel==='done');
+ await page.getByRole('link',{name:'登录／注册',exact:true}).click();
+ const wheeled=await page.evaluate(()=>JSON.parse(sessionStorage.getItem('560-town-account-return-v1')).zoom.third);
+ assert.ok(wheeled>nearer&&wheeled<=60,`wheel: ${wheeled}, before: ${nearer}`);console.log('PASS mouse wheel remains functional');
+ await page.getByRole('button',{name:'注册居民',exact:true}).click();
+ const phone='197'+randomInt(10000000,99999999),password='Browser'+randomUUID()+'42';
+ await page.getByLabel('手机号',{exact:true}).fill(phone);
+ await page.getByLabel('设置密码',{exact:true}).fill(password);
+ await page.getByLabel('确认密码',{exact:true}).fill(password);
+ await page.getByRole('button',{name:'注册并进入小镇',exact:true}).click();
+ await page.locator('.wb-content').waitFor();
+ const me=await page.evaluate(async()=>await(await fetch('/api/account')).json());assert.equal(me.user.role,'user');
+ console.log('PASS browser registration creates ordinary resident');
+ const db=new Pool({connectionString:process.env.DATABASE_URL});
+ try{await db.query('UPDATE "user" SET role=\'super_admin\' WHERE id=$1',[me.user.id]);}finally{await db.end();}
+ await page.setViewportSize({width:1440,height:1000});
+ await page.goto('https://town-password.test/'+process.env.TOWN_SYSTEM_ENTRY+'?section=registration');
+ await page.getByRole('switch').waitFor();
+ assert.equal(await page.getByRole('switch').isChecked(),false);
+ assert.equal(await page.getByRole('switch').isDisabled(),true);
+ await page.screenshot({path:'.local/verification/registration-admin-desktop.png',fullPage:true});
+ assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+ console.log('PASS desktop super-admin SMS switch is off and unavailable until configured');
+}finally{await browser.close();}

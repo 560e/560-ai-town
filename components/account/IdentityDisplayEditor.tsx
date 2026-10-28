@@ -1,0 +1,19 @@
+"use client";
+import {useCallback,useEffect,useRef,useState} from 'react';
+import {type IdentityPreferences} from '@/lib/identity-display';
+import {useAccount,accountRequest} from './AccountProvider';
+import {IdentityChip,IdentityBadges} from './IdentityBadges';
+export default function IdentityDisplayEditor(){
+ const account=useAccount(),[data,setData]=useState<IdentityPreferences|null>(null),[selected,setSelected]=useState<string[]>([]),[busy,setBusy]=useState(true),[error,setError]=useState(''),[notice,setNotice]=useState(''),drag=useRef<string|null>(null);
+ const load=useCallback(async()=>{setBusy(true);setError('');try{const response=await fetch('/api/account/identity-display',{cache:'no-store'}),result=await response.json();if(!response.ok)throw Error(result.error);setData(result);setSelected(result.selected);}catch(e){setError((e as Error).message);}finally{setBusy(false);}},[]);
+ useEffect(()=>{void load();},[load]);
+ const move=(id:string,index:number)=>{setSelected(previous=>{const next=previous.filter(v=>v!==id);next.splice(index,0,id);return next;});setNotice('');};
+ const save=async()=>{if(!data)return;setBusy(true);setError('');setNotice('');try{const result=await accountRequest('/api/account/identity-display',{version:data.version,selected},'PATCH');setData(result);setSelected(result.selected);await account.refreshBadges();setNotice('展示身份已保存，将同步到人物头顶。');}catch(e){setError((e as Error).message);}finally{setBusy(false);}};
+ const picked=selected.flatMap(id=>data?.choices.find(c=>c.id===id)||[]);
+ return <section className="account-panel identity-editor" id="identity-display"><div className="identity-heading"><h2>头顶身份展示</h2><strong>{selected.length} / 10</strong></div><p className="account-help">选择已获得的身份，自由决定展示顺序。隐藏不影响权限；到期或撤销后自动停止显示。</p>
+ <div className="identity-preview"><b>{account.user?.name}</b><IdentityBadges badges={picked} compact/><small>昵称下方每排3个，最多展示6个；点击“＋数量”查看全部</small></div>
+ {error&&<p className="account-error" role="alert">{error}</p>}{notice&&<p className="account-notice" role="status">{notice}</p>}
+ {!data?<p role="status">{busy?'正在读取身份…':'身份读取失败，请重试。'}</p>:<fieldset disabled={busy}><legend>选择显示的身份</legend><div className="identity-choices">{data.choices.map(c=><label key={c.id}><input type="checkbox" checked={selected.includes(c.id)} disabled={!c.allowed||!selected.includes(c.id)&&selected.length>=10} onChange={e=>{setSelected(previous=>e.target.checked?[...previous,c.id]:previous.filter(id=>id!==c.id));setNotice('');}}/><IdentityChip badge={c}/><small>{!c.allowed?'暂未开放头顶展示':c.kind==='resident'?'默认身份':c.kind==='honor'?'荣誉称号':'权限称号'}</small></label>)}</div>
+ <h3>展示顺序</h3><p className="account-help">拖动调整顺序，也可使用上移、下移按钮。前6项显示在昵称下方，每排3个；其余身份点击展开。</p><ol className="identity-order">{picked.map((c,index)=><li key={c.id} draggable={!busy} onDragStart={e=>{drag.current=c.id;e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain',c.id);}} onDragEnd={()=>{drag.current=null;}} onDragOver={e=>{if(drag.current)e.preventDefault();}} onDrop={e=>{e.preventDefault();if(drag.current&&selected.includes(drag.current))move(drag.current,index);drag.current=null;}}><span className="identity-grip" aria-hidden>⠿</span><span>{index+1}.</span><IdentityChip badge={c}/><div><button type="button" disabled={index===0} aria-label={`上移${c.name}`} onClick={()=>move(c.id,index-1)}>↑</button><button type="button" disabled={index===picked.length-1} aria-label={`下移${c.name}`} onClick={()=>move(c.id,index+1)}>↓</button><button type="button" aria-label={`隐藏${c.name}`} onClick={()=>setSelected(previous=>previous.filter(id=>id!==c.id))}>隐藏</button></div></li>)}</ol>{!picked.length&&<p className="account-help">当前仅显示昵称，不显示身份。</p>}</fieldset>}
+ <div className="identity-actions"><button className="account-primary" disabled={busy||!data} onClick={()=>void save()}>保存展示设置</button><button className="account-secondary" disabled={busy} onClick={()=>void load()}>重新读取</button></div></section>;
+}

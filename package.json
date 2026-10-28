@@ -1,0 +1,45 @@
+{
+  "name": "560-ai-coastal-town",
+  "version": "0.0.5",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev --hostname 127.0.0.1",
+    "build": "next build",
+    "start": "next start --hostname 0.0.0.0",
+    "typecheck": "tsc --noEmit",
+    "test": "node --experimental-strip-types --test --test-isolation=none tests/*.test.ts",
+    "db:start": "node scripts/local-database.mjs start",
+    "db:stop": "node scripts/local-database.mjs stop",
+    "db:migrate": "node --experimental-strip-types scripts/database-migrate.ts",
+    "local:setup": "node scripts/local-database.mjs start && npm run db:migrate",
+    "admin:grant": "node --experimental-strip-types scripts/admin-account.ts",
+    "local:dev": "npm run db:start && npm run dev",
+    "test:identities": "node --experimental-strip-types tests/identity-display.integration.mjs",
+    "test:accounts": "node tests/accounts.integration.mjs",
+    "test:multiplayer": "node tests/multiplayer.integration.mjs",
+    "test:chat": "node tests/chat.integration.mjs",
+    "test:rooms": "node tests/rooms.integration.mjs && node tests/room-routing.integration.mjs",
+    "release:pack": "node scripts/package-release.mjs"
+  },
+  "dependencies": {
+    "@react-three/drei": "10.7.8",
+    "@react-three/fiber": "9.7.0",
+    "better-auth": "1.7.5",
+    "next": "16.3.5",
+    "pg": "8.20.0",
+    "react": "~19.2.0",
+    "react-dom": "~19.2.0",
+    "sharp": "0.35.4",
+    "three": "^0.183.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24",
+    "@types/pg": "8.16.0",
+    "@types/react": "^19.2",
+    "@types/react-dom": "^19.2",
+    "@types/three": "^0.183.0",
+    "typescript": "^5.9"
+  },
+  "license": "MIT"
+}

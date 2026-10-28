@@ -1,0 +1,18 @@
+node_modules/
+.next/
+.npm-cache/
+*.tsbuildinfo
+.env*
+!.env.example
+artifacts/
+.local/
+dev.log
+dev-error.log
+
+# Deployment and private local data
+.deployment/
+backups/
+*.dump
+*.pem
+*.key
+*.log

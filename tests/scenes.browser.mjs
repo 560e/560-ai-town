@@ -1,0 +1,55 @@
+import assert from 'node:assert/strict';
+import {createRequire} from 'node:module';
+import {randomInt,randomUUID} from 'node:crypto';
+import {mkdir} from 'node:fs/promises';
+import {setTimeout as delay} from 'node:timers/promises';
+import {Pool} from 'pg';
+import {localHttp as fetch} from './local-http.mjs';
+assert.equal(process.env.TOWN_DISPOSABLE_TEST_DB,'1');
+const dbUrl=new URL(process.env.DATABASE_URL);assert.match(dbUrl.pathname,/^\/town_verify_/);assert.equal(dbUrl.hostname,'127.0.0.1');
+const base=process.env.PASSWORD_TEST_URL,{chromium}=createRequire(import.meta.url)(process.env.TOWN_PLAYWRIGHT_MODULE);
+const db=new Pool({connectionString:dbUrl.href}),browser=await chromium.launch({executablePath:process.env.TOWN_BROWSER_EXECUTABLE,headless:true,args:['--use-angle=swiftshader','--enable-unsafe-swiftshader']});
+let keepPeer=false,peerLoop;
+async function until(check,label){for(let i=0;i<120;i++){const value=await check();if(value)return value;await delay(250);}throw Error('Timed out: '+label);}
+try{
+ const context=await browser.newContext({viewport:{width:1280,height:900}});
+ await context.route('https://town-password.test/**',async route=>{const req=route.request(),u=new URL(req.url());await route.fulfill({response:await context.request.fetch(base+u.pathname+u.search,{method:req.method(),headers:{...req.headers(),host:'town-password.test','x-forwarded-host':'town-password.test','x-forwarded-proto':'https','x-real-ip':'127.0.0.81','x-forwarded-for':'127.0.0.81'},data:req.postDataBuffer()??undefined,maxRedirects:0})});});
+ const page=await context.newPage(),errors=[],leaves=[];page.setDefaultTimeout(60000);page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{if(r.url().endsWith('/api/town/presence')&&r.postDataJSON()?.op==='leave')leaves.push(r.postDataJSON());});
+ await page.goto('https://town-password.test/account');
+ const phoneNumber='196'+randomInt(10000000,99999999),password='BrowserScene'+randomUUID()+'42';
+ assert.equal(await page.evaluate(async data=>(await fetch('/api/auth/password/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)})).status,{name:'测试'+Math.random().toString(36).slice(2,12),phoneNumber,password}),200);
+ await page.reload();await page.getByRole('link',{name:'游览小镇',exact:true}).click();await page.getByRole('button',{name:'游览小镇',exact:true}).click();
+ await page.getByRole('button',{name:'切换房间'}).waitFor();
+ const account=await page.evaluate(async()=>(await fetch('/api/account')).json()),id=account.user.id;
+ const row=async()=>(await db.query('SELECT * FROM town_presence WHERE user_id=$1',[id])).rows[0];
+ await until(async()=>(await row())?.online,'initial join');
+ const room=randomInt(500000,650000),secret='scene-friends';
+ await page.getByRole('button',{name:'切换房间'}).click();await page.getByLabel('查找或创建房间').fill(String(room));
+ await page.getByRole('button',{name:`创建 ${room} 号房间`,exact:true}).click();await page.getByLabel('房间密码').fill(secret);await page.getByRole('button',{name:'确认创建并进入'}).click();
+ await until(async()=>(await row())?.room===room,'protected room');const generation=(await row()).room_instance;
+ await page.getByRole('button',{name:'街区导航',exact:true}).click();await page.getByRole('navigation',{name:'街区子页面'}).getByRole('button',{name:/AI服务中心/}).click();
+ await page.waitForURL('**/service');await until(async()=>{const r=await row();return r?.scene==='service'&&r.room===room;},'hall keeps room');
+ assert.equal((await row()).room_instance,generation);assert.equal(leaves.length,0);
+ console.log('PASS browser protected room remains occupied through main → hall');
+ // A second authenticated API resident renders in the actual hall; its lease ticks independently.
+ let peerCookie='',owner=randomUUID(),seq=0,peerPose={x:0,z:7,yaw:Math.PI,moving:false,seat:null};
+ const peerCall=async(path,data)=>{const r=await fetch(base+path,{method:'POST',headers:{Host:'town-password.test','x-forwarded-host':'town-password.test','x-forwarded-proto':'https',Origin:'https://town-password.test','x-real-ip':'127.0.0.82','x-forwarded-for':'127.0.0.82','Content-Type':'application/json',Cookie:peerCookie},body:JSON.stringify(data)});const body=await r.json();assert.equal(r.status,200,JSON.stringify(body));return {body,cookie:r.headers.getSetCookie().map(c=>c.split(';')[0]).join('; ')};};
+ peerCookie=(await peerCall('/api/auth/password/register',{name:'测试'+Math.random().toString(36).slice(2,12),phoneNumber:'196'+randomInt(10000000,99999999),password})).cookie;
+ await peerCall('/api/town/presence',{op:'join',owner,scene:'service'});
+ const newOwner=randomUUID();await peerCall('/api/town/presence',{op:'room',owner,newOwner,action:'enter',room,instance:generation,password:secret});owner=newOwner;
+ await delay(250);peerPose=(await peerCall('/api/town/presence',{op:'tick',owner,seq:++seq,scene:'service',pose:peerPose,spawn:'guide'})).body.self;
+ await peerCall('/api/town/chat',{op:'speak',owner,text:'同房大厅验证',messageId:randomUUID()});
+ keepPeer=true;peerLoop=(async()=>{while(keepPeer){await delay(500);if(keepPeer)await peerCall('/api/town/presence',{op:'tick',owner,seq:++seq,scene:'service',pose:peerPose});}})();
+ await page.getByText('同房大厅验证',{exact:true}).waitFor();
+ await mkdir('.local/verification',{recursive:true});await page.screenshot({path:'.local/verification/cross-scene-hall.png'});
+ console.log('PASS same-room hall peer and public bubble render');
+ await page.setViewportSize({width:430,height:932});await page.screenshot({path:'.local/verification/cross-scene-hall-mobile.png'});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);await page.setViewportSize({width:1280,height:900});
+ await page.getByRole('link',{name:'返回小镇',exact:true}).click();await until(async()=>{const r=await row();return r?.scene==='town'&&r.room===room;},'return town');assert.equal(leaves.length,0);
+ await page.getByRole('button',{name:'返回全景',exact:true}).click();await page.getByRole('button',{name:'街区导航',exact:true}).click();await page.getByRole('navigation',{name:'街区子页面'}).getByRole('button',{name:/AI创业园/}).click();
+ await page.getByRole('dialog',{name:'AI创业园',exact:true}).waitFor();assert.equal(new URL(page.url()).pathname,'/');await until(async()=>{const r=await row();return r?.scene==='town'&&r.room===room;},'intro window retains town');await page.keyboard.press('Escape');
+ await page.getByRole('link',{name:'个人中心',exact:true}).click();await until(async()=>{const r=await row();return r?.scene==='account'&&r.room===room;},'account parks membership');
+ await page.getByRole('link',{name:'游览小镇',exact:true}).click();await until(async()=>{const r=await row();return r?.scene==='town'&&r.room===room;},'account return');assert.equal(leaves.length,0);assert.deepEqual(errors,[]);
+ keepPeer=false;await peerLoop;await peerCall('/api/town/presence',{op:'leave',owner});
+ await page.close();await until(async()=>{await peerCall('/api/town/presence',{op:'leave',owner});return (await db.query('SELECT 1 FROM town_rooms WHERE number=$1',[room])).rowCount===0;},'final close/lease expiry releases room on sweep');
+ console.log('PASS browser intro/account/return preserve room; final close releases; no runtime errors');
+}finally{keepPeer=false;await peerLoop?.catch(()=>{});await browser.close();await db.end();}

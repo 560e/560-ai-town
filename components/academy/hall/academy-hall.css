@@ -1,0 +1,8 @@
+.academy-hall-panel .academy-panel-links{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:28px}
+.academy-hall-panel .academy-panel-links button{display:flex;align-items:center;justify-content:center;min-height:58px;padding:16px;border:1px solid #bfdcea;border-radius:12px;background:#edf7fd;color:#176a9b;text-decoration:none;font-weight:600;text-align:center}
+.academy-hall-panel .academy-panel-links button:hover{background:#d9effa}
+.academy-hall-panel .academy-panel-links button:focus-visible{outline:3px solid #177dac;outline-offset:3px}
+@media(max-width:760px){.academy-hall-panel .academy-panel-links{grid-template-columns:1fr;gap:10px;margin-top:20px}.academy-hall-panel .academy-panel-links button{min-height:48px;padding:12px}}
+
+.campus-board-columns{display:grid;grid-template-columns:1fr 1fr;gap:20px}.campus-board-columns section{padding:18px;border:1px solid #cbdfee;border-radius:12px;background:#f4f9fc}.campus-course-links{display:grid;grid-template-columns:1fr 1fr;gap:12px}.campus-course-links a{padding:14px;background:#edf6ff;border:1px solid #cadfec;border-radius:10px;text-decoration:none;color:#245681;display:grid;gap:5px}.campus-course-links span{font-size:13px}.campus-course-links strong{overflow-wrap:anywhere}@media(max-width:650px){.campus-board-columns,.campus-course-links{grid-template-columns:1fr}}
+
